@@ -1,0 +1,301 @@
+================================================================================
+  ScreenCaptureBlocker — Интеграция в iOS-приложение (Objective-C)
+================================================================================
+
+Версия документа: 20 апреля 2026
+Файлы: ScreenCaptureBlocker.h / ScreenCaptureBlocker.m
+
+
+────────────────────────────────────────────────────────────────────────────────
+1. КАК ЭТО РАБОТАЕТ
+────────────────────────────────────────────────────────────────────────────────
+
+Класс реализует два независимых механизма защиты:
+
+A) CALayer-swap (защита контента на уровне рендерера)
+   ─────────────────────────────────────────────────
+   Основан на технике из статьи:
+   https://habr.com/ru/companies/deiteriylab/articles/900028/
+   (оригинал: https://sidorov.tech/all/lovim-skrinshoty/)
+
+   Как работает:
+   1. Создаётся скрытый UITextField за пределами экрана.
+   2. Включается secureTextEntry = YES — UIKit создаёт внутренний
+      LayoutCanvasView с защищённым CALayer.
+   3. Через KVC layer LayoutCanvasView временно подменяется на защищаемый
+      layer (например, webView.layer).
+   4. При переключении secureTextEntry NO→YES UIKit проставляет атрибут
+      disableUpdateMask на этом layer — iOS исключает его из системного
+      буфера захвата экрана.
+   5. Оригинальный layer LayoutCanvasView восстанавливается, UITextField
+      убирается.
+
+   Результат: содержимое защищённого layer отображается чёрным на
+   скриншотах, при записи экрана, AirPlay и QuickTime Mirror.
+
+   ВАЖНО: применять только после того, как view добавлена в иерархию окна
+   (viewDidAppear: или позже). До этого hostWindow не будет найден.
+
+B) Overlay-оверлей (реакция на события захвата)
+   ─────────────────────────────────────────────
+   Синглтон подписывается на системные уведомления:
+
+   - UIApplicationUserDidTakeScreenshotNotification (iOS 7+)
+     → показывает чёрный оверлей поверх всего на 3 секунды.
+
+   - UIScreenCapturedDidChangeNotification (iOS 11+)
+     → показывает постоянный чёрный оверлей пока идёт запись экрана,
+       AirPlay Mirror или QuickTime. Убирается когда запись остановлена.
+
+   Оверлей — отдельный UIWindow с windowLevel = UIWindowLevelAlert + 100,
+   то есть поверх системных алертов. Экран полностью чёрный, без текста
+   и иконок.
+
+
+────────────────────────────────────────────────────────────────────────────────
+2. ФАЙЛЫ ДЛЯ КОПИРОВАНИЯ
+────────────────────────────────────────────────────────────────────────────────
+
+Скопировать в папку Classes/ Xcode-проекта:
+
+  ScreenCaptureBlocker.h
+  ScreenCaptureBlocker.m
+
+Расположение в данном репозитории:
+  EasyLaunch-Patch/Sources/Classes/ScreenCaptureBlocker.h
+  EasyLaunch-Patch/Sources/Classes/ScreenCaptureBlocker.m
+
+
+────────────────────────────────────────────────────────────────────────────────
+3. ДОБАВЛЕНИЕ В XCODE-ПРОЕКТ (вручную)
+────────────────────────────────────────────────────────────────────────────────
+
+1. Скопировать оба файла в Classes/ целевого проекта.
+
+2. В Xcode: File → Add Files to "ProjectName" → выбрать оба файла.
+   Убедиться что target membership у .m установлен в нужный таргет
+   (обычно UnityFramework или Unity-iPhone).
+
+3. ScreenCaptureBlocker.m должен присутствовать в:
+   Target → Build Phases → Compile Sources
+
+4. Дополнительные фреймворки: не требуются.
+   UIKit и objc/runtime уже включены в iOS SDK.
+
+5. Требования к Build Settings:
+   - Enable Objective-C Exceptions: НЕ требуется (код не использует @try/@catch)
+   - Minimum Deployment Target: iOS 9.0+
+   - Рекомендуется: iOS 11.0+ для полной защиты от записи экрана
+
+
+────────────────────────────────────────────────────────────────────────────────
+4. ДОБАВЛЕНИЕ ЧЕРЕЗ СКРИПТ ПАТЧА (для EasyLaunch)
+────────────────────────────────────────────────────────────────────────────────
+
+Файлы уже включены в автоматический патч:
+
+В patch.sh в массиве PATCH_FILES:
+  "ScreenCaptureBlocker.h"
+  "ScreenCaptureBlocker.m"
+
+В Scripts/patch_pbxproj.py в DEFAULT_PATCH_FILES:
+  "ScreenCaptureBlocker.h"
+  "ScreenCaptureBlocker.m"
+
+Скрипт автоматически:
+  - Копирует файлы в Classes/ (Шаг 1, patch.sh)
+  - Создаёт PBXFileReference в project.pbxproj
+  - Добавляет .m в PBXSourcesBuildPhase таргета UnityFramework
+
+
+────────────────────────────────────────────────────────────────────────────────
+5. ИНТЕГРАЦИЯ В КОД — ГЛОБАЛЬНАЯ ЗАЩИТА
+────────────────────────────────────────────────────────────────────────────────
+
+Добавить в AppDelegate (или аналогичный класс), в метод
+application:didFinishLaunchingWithOptions:, ПОСЛЕ вызова [super ...]:
+
+  // ── Шаг 1: импорт ──────────────────────────────────────────────────────
+  #import "ScreenCaptureBlocker.h"
+
+  // ── Шаг 2: запуск защиты ───────────────────────────────────────────────
+  - (BOOL)application:(UIApplication *)application
+      didFinishLaunchingWithOptions:(NSDictionary *)launchOptions
+  {
+      BOOL result = [super application:application
+                 didFinishLaunchingWithOptions:launchOptions];
+
+      // Запускать после super — UIWindow к этому моменту уже существует
+      [[ScreenCaptureBlocker sharedBlocker] startProtecting];
+
+      return result;
+  }
+
+Защита активна на весь жизненный цикл приложения.
+
+Для Unity-проектов: вызов делается в CustomAppController.mm (подкласс
+UnityAppController), который и является AppDelegate.
+
+
+────────────────────────────────────────────────────────────────────────────────
+6. ИНТЕГРАЦИЯ В КОД — ЗАЩИТА КОНКРЕТНОГО VIEW/LAYER
+────────────────────────────────────────────────────────────────────────────────
+
+Применяется для отдельного UIView (например WKWebView), чтобы его
+содержимое было чёрным непосредственно на скриншоте (не только оверлей).
+
+  // ── В UIViewController, где нужна защита ──────────────────────────────
+  #import "ScreenCaptureBlocker.h"
+
+  - (void)viewDidAppear:(BOOL)animated
+  {
+      [super viewDidAppear:animated];
+      // ВАЖНО: вызывать строго в viewDidAppear: или позже,
+      // когда view уже добавлена в иерархию окна.
+      [ScreenCaptureBlocker applyProtectionToLayer:self.someView.layer];
+  }
+
+Для WKWebView (WebViewController.m в данном проекте):
+
+  - (void)viewDidAppear:(BOOL)animated
+  {
+      [super viewDidAppear:animated];
+      [ScreenCaptureBlocker applyProtectionToLayer:self.webView.layer];
+  }
+
+Метод возвращает:
+  YES — защита успешно применена
+  NO  — LayoutCanvasView не найден (iOS не поддерживает технику, нет окна,
+        или view не в иерархии). В этом случае overlay-защита (п.5) всё
+        равно работает.
+
+
+────────────────────────────────────────────────────────────────────────────────
+7. ОСТАНОВКА ЗАЩИТЫ (при необходимости)
+────────────────────────────────────────────────────────────────────────────────
+
+  [[ScreenCaptureBlocker sharedBlocker] stopProtecting];
+
+Метод:
+  - Отписывается от всех уведомлений
+  - Скрывает оверлей если он был активен
+  - Безопасно вызывать повторно
+
+
+────────────────────────────────────────────────────────────────────────────────
+8. ПОВЕДЕНИЕ НА РАЗНЫХ iOS
+────────────────────────────────────────────────────────────────────────────────
+
+  iOS 7–10:   Только уведомление о скриншоте (overlay 3 сек).
+              applyProtectionToLayer: работает (secureTextEntry доступен).
+
+  iOS 11–12:  + Обнаружение записи экрана / AirPlay (постоянный overlay).
+              applyProtectionToLayer: работает.
+
+  iOS 13+:    + Поддержка UIWindowScene для создания overlay-окна.
+              applyProtectionToLayer: работает.
+
+  iOS 15+:    + Улучшенное восстановление keyWindow после скрытия overlay.
+
+  iOS 18.4+:  UIScreen.isCaptured помечен как deprecated. Код использует
+              UIScreenCapturedDidChangeNotification — она не deprecated.
+              Требует отдельного обновления на sceneCaptureState (iOS 17+)
+              при необходимости поддержки актуального API.
+
+  СИМУЛЯТОР:  UIApplicationUserDidTakeScreenshotNotification не срабатывает
+              (ограничение платформы). Скриншоты через Cmd+S обрабатываются
+              macOS, минуя iOS. Тестировать только на реальном устройстве.
+
+
+────────────────────────────────────────────────────────────────────────────────
+9. ОГРАНИЧЕНИЯ
+────────────────────────────────────────────────────────────────────────────────
+
+1. Аппаратные захватчики (HDMI-dongles, Lightning→HDMI адаптеры) —
+   не обнаруживаются никакими средствами iOS.
+
+2. Запись с другого устройства направленной на экран — не блокируется.
+
+3. applyProtectionToLayer: основан на приватном внутреннем классе
+   UIKit (LayoutCanvasView). Apple может изменить реализацию в будущих
+   версиях iOS — метод вернёт NO и запишет предупреждение в лог.
+   Overlay-защита при этом продолжит работать.
+
+4. KVC-запись в layer LayoutCanvasView использует приватный API UIKit.
+   App Store Review: аналогичная техника используется в Telegram.
+   Формально запрет на приватный API может стать поводом для отклонения,
+   однако на практике подобные реализации проходят ревью.
+
+
+────────────────────────────────────────────────────────────────────────────────
+10. ПУБЛИЧНЫЙ API КЛАССА
+────────────────────────────────────────────────────────────────────────────────
+
+  @interface ScreenCaptureBlocker : NSObject
+
+  // Синглтон
+  + (instancetype)sharedBlocker;
+
+  // Запустить наблюдение (overlay при скриншоте/записи). Безопасно повторно.
+  - (void)startProtecting;
+
+  // Остановить наблюдение и скрыть overlay.
+  - (void)stopProtecting;
+
+  // Защитить конкретный CALayer от попадания в скриншот/запись на уровне
+  // рендерера. Вызывать после viewDidAppear:.
+  // Возвращает YES если применено, NO если LayoutCanvasView не найден.
+  + (BOOL)applyProtectionToLayer:(CALayer *)layer;
+
+  @end
+
+
+────────────────────────────────────────────────────────────────────────────────
+11. ПОЛНЫЙ МИНИМАЛЬНЫЙ ПРИМЕР ДЛЯ НОВОГО ПРОЕКТА
+────────────────────────────────────────────────────────────────────────────────
+
+// AppDelegate.m
+#import "AppDelegate.h"
+#import "ScreenCaptureBlocker.h"
+
+@implementation AppDelegate
+
+- (BOOL)application:(UIApplication *)application
+    didFinishLaunchingWithOptions:(NSDictionary *)launchOptions
+{
+    [[ScreenCaptureBlocker sharedBlocker] startProtecting];
+    return YES;
+}
+
+@end
+
+
+// MyViewController.m — защита конкретного WKWebView
+#import "MyViewController.h"
+#import "ScreenCaptureBlocker.h"
+#import <WebKit/WebKit.h>
+
+@interface MyViewController ()
+@property (nonatomic, strong) WKWebView *webView;
+@end
+
+@implementation MyViewController
+
+- (void)viewDidLoad
+{
+    [super viewDidLoad];
+    self.webView = [[WKWebView alloc] initWithFrame:self.view.bounds];
+    [self.view addSubview:self.webView];
+    [self.webView loadRequest:[NSURLRequest requestWithURL:[NSURL URLWithString:@"https://example.com"]]];
+}
+
+- (void)viewDidAppear:(BOOL)animated
+{
+    [super viewDidAppear:animated];
+    // Вызывать именно здесь — view уже в иерархии окна
+    [ScreenCaptureBlocker applyProtectionToLayer:self.webView.layer];
+}
+
+@end
+
+================================================================================
