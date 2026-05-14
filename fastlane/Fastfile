@@ -78,6 +78,14 @@ platform :ios do
       profile_name: "match AppStore #{ENV["BUNDLE_IDENTIFIER"]}.NotificationService",
     )
 
+    set_build_settings(
+      path: "#{ENV['IOS_BUILD_PATH']}/iOS/Unity-iPhone.xcodeproj",
+      targets: ENV["XC_TARGET_NAME"],
+      build_settings: {
+      "SUPPORTED_PLATFORMS" => "iphoneos"  # Или "iphoneos iphonesimulator" для обоих
+      }
+    )
+
     version_number = ENV['MAJOR_VERSION'] || '1.0.0'
     increment_version_number(
       version_number: version_number,
