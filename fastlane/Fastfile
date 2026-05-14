@@ -1,4 +1,4 @@
-default_platform(:ios)
+Ôªødefault_platform(:ios)
 
 platform :ios do
 
@@ -82,7 +82,7 @@ platform :ios do
       path: "#{ENV['IOS_BUILD_PATH']}/iOS/Unity-iPhone.xcodeproj",
       targets: ENV["XC_TARGET_NAME"],
       build_settings: {
-      "SUPPORTED_PLATFORMS" => "iphoneos"  # »ÎË "iphoneos iphonesimulator" ‰Îˇ Ó·ÓËı
+      "SUPPORTED_PLATFORMS" => "iphoneos"  # –ò–ª–∏ "iphoneos iphonesimulator" –¥–ª—è –æ–±–æ–∏—Ö
       }
     )
 
