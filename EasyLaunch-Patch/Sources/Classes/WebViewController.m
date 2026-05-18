@@ -57,6 +57,8 @@
             "var meta=document.querySelector('meta[name=viewport]');"
             "if(!meta){meta=document.createElement('meta');meta.name='viewport';document.head.appendChild(meta);}"
             "meta.content='width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no';"
+            "try{document.documentElement.style.webkitTextSizeAdjust='100%';}catch(e){}"
+            "try{if(document.body)document.body.style.webkitTextSizeAdjust='100%';}catch(e){}"
         "}"
         "lockViewport();"
         "setInterval(lockViewport,500);"
@@ -500,4 +502,5 @@
     // Reset zoom scale when keyboard is hidden
     self.webView.scrollView.zoomScale = 1.0;
 }
+
 @end
