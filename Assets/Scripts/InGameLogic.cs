@@ -170,7 +170,7 @@ public class InGameLogic : MonoBehaviour {
                     ActivateTrails();
                     animator.Play("StartAnim");
                     rigidBody.constraints = RigidbodyConstraints.FreezeAll;
-                    trackPointRigidbody.MovePosition(currentPointPath.MainPoints[currentPointPath.ClosestPointIndex(LevelBasedData.Instance.playerInitialPoint.position) + 100]);
+                    trackPointRigidbody.MovePosition(GetLookAheadPoint(LevelBasedData.Instance.playerInitialPoint.position));
                     if (!gameStart)
                     {
                         if (Time.time - CommonData.Instance.gameStartTime >= INTROTIME)
@@ -190,7 +190,7 @@ public class InGameLogic : MonoBehaviour {
                     {
                         CommonData.Instance.winPanel.SetActive(false);
                         //Debug.Log(currentPointPath.MainPoints[currentPointPath.ClosestPointIndex(transform.position) + 100]);
-                        trackPointRigidbody.MovePosition(currentPointPath.MainPoints[currentPointPath.ClosestPointIndex(transform.position) + 100]);
+                        trackPointRigidbody.MovePosition(GetLookAheadPoint(transform.position));
                         startPanel.SetActive(true);
                         LeanTween.alpha(CommonData.Instance.loadingBlack, 0, .3f).setOnComplete(() => CommonData.Instance.loadingCanvas.SetActive(false));
                     }
@@ -290,7 +290,7 @@ public class InGameLogic : MonoBehaviour {
     {
         if (levelStart)
         {
-            trackPointRigidbody.MovePosition(currentPointPath.MainPoints[currentPointPath.ClosestPointIndex(transform.position) + 100]);
+            trackPointRigidbody.MovePosition(GetLookAheadPoint(transform.position));
             horizontal = joystick.Horizontal;
             if (horizontal != 0 && !startedMove) startedMove = true;
             closestPointOnPath = currentPointPath.LastClosePoint;
@@ -636,7 +636,14 @@ public class InGameLogic : MonoBehaviour {
     private IEnumerator AfterGameOver(float time)
     {
         yield return new WaitForSeconds(time);
-        trackPointRigidbody.MovePosition(currentPointPath.MainPoints[currentPointPath.ClosestPointIndex(LevelBasedData.Instance.playerInitialPoint.transform.position) + 100]);
+        trackPointRigidbody.MovePosition(GetLookAheadPoint(LevelBasedData.Instance.playerInitialPoint.transform.position));
+    }
+
+    private Vector3 GetLookAheadPoint(Vector3 position)
+    {
+        int closestIndex = currentPointPath.ClosestPointIndex(position);
+        int lookAheadIndex = Mathf.Min(closestIndex + 100, currentPointPath.NumOfPoints - 1);
+        return currentPointPath.MainPoints[lookAheadIndex];
     }
 
     public void OnClick_Restart()
