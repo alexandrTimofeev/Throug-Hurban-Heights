@@ -1,4 +1,4 @@
-name: unity-build-and-ios-upload
+﻿name: unity-build-and-ios-upload
 
 on:
   workflow_dispatch:
@@ -148,12 +148,6 @@ jobs:
           sed -i "0,/    iPhone: .*/s/    iPhone: .*/    iPhone: ${BUNDLE_IDENTIFIER}/" ProjectSettings/ProjectSettings.asset
           echo "Set to: ${BUNDLE_IDENTIFIER}"
           grep "iPhone:" ProjectSettings/ProjectSettings.asset
-          echo "::endgroup::"
-
-          echo "::group::Target device"
-          sed -i "s/  targetDevice: .*/  targetDevice: 0/" ProjectSettings/ProjectSettings.asset
-          echo "Set to: iPhone only (0)"
-          grep "targetDevice:" ProjectSettings/ProjectSettings.asset
           echo "::endgroup::"
 
           echo "::group::Disable Unity Splash Screen"
